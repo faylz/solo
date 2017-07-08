@@ -222,3 +222,4 @@ Logo 征集中....
 
 * [idream](https://github.com/b3log/solo-third-skins/tree/master/idream)
 ![idream](https://github.com/b3log/solo-third-skins/blob/master/skin-preview/idream.jpg?raw=true)
+
