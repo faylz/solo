@@ -17,7 +17,7 @@
 * admin style
 *
 * @author <a href="http://vanessa.b3log.org">Liyuan Li</a>
-* @version 2.2.7.4, Apr 25, 2017
+* @version 2.3.8.4, May 31, 2017
 */
 
 /* start resset */
@@ -680,17 +680,29 @@ a[class*=" icon-"]:hover {
 
 #top > .right a{
     color: #555;
-    line-height: 50px;
-    margin: 0 10px;
+    line-height: 32px;
+    margin: 8px 10px;
     border: 1px solid #f6f6f6;
     background-color: #f6f6f6;
     border-radius: 100px;
-    padding: 10px;
+    padding: 0 10px;
     text-decoration: none;
+    display: inline-block;
 }
 
 #top > .right a:hover {
     color: #333;
+}
+
+#top .avatar {
+    height: 25px;
+    width: 25px;
+    border-radius: 20px;
+    background-size: cover;
+    background-repeat: no-repeat;
+    background-position: center center;
+    float: left;
+    margin: 3px 6px 0 0;
 }
 /* end top-nav */
 
@@ -726,6 +738,7 @@ a[class*=" icon-"]:hover {
     line-height: 18px;
     height: 18px;
     transition: all 0.3s ease;
+    cursor: pointer;
 }
 
 #tabs a:hover,
@@ -907,14 +920,12 @@ table.form th {
     width: 170px;
 }
 
-button#submitArticle,
-#unSubmitArticle {
+button#submitArticle {
     background-color: #fa8564;
     border-color: #fa8564;
 }
 
-button#submitArticle:hover,
-#unSubmitArticle:hover{
+button#submitArticle:hover {
     background-color: #ec6459;
     border-color: #ec6459;
 }
@@ -953,8 +964,7 @@ button#submitArticle:hover,
     border-radius: 3px;
     box-shadow: 1px 1px 3px #333333;
     line-height: 16px;
-    margin: 24px 12px;
-    padding: 5px;
+    margin: 10px;
     text-align: center;
 }
 
@@ -999,12 +1009,13 @@ button#submitArticle:hover,
     margin: 20px 0;
 }
 
-.ico-alipay-me {
-    background-image: url("../images/alipay-me.png");
-    font-size: 20px;
-    height: 24px;
-    margin: 20px 0;
-    width: 126px;
+.content-reset .about-list li {
+    border: 0;
+}
+
+.content-reset .about-list li:hover {
+    background-color: #fff;
+    text-decoration: underline;
 }
 /* end about */
 

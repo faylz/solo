@@ -41,6 +41,8 @@ import org.b3log.solo.SoloServletListener;
 import org.b3log.solo.model.*;
 import org.b3log.solo.repository.*;
 import org.b3log.solo.service.*;
+import org.b3log.solo.util.Emotions;
+import org.b3log.solo.util.Markdowns;
 import org.b3log.solo.util.Thumbnails;
 import org.b3log.solo.util.comparator.Comparators;
 import org.json.JSONArray;
@@ -58,7 +60,7 @@ import static org.b3log.solo.model.Article.ARTICLE_CONTENT;
  *
  * @author <a href="http://88250.b3log.org">Liang Ding</a>
  * @author <a href="http://vanessa.b3log.org">Liyuan Li</a>
- * @version 1.6.12.13, Apr 8, 2017
+ * @version 1.6.14.14, Aug 2, 2017
  * @since 0.3.1
  */
 @Service
@@ -67,90 +69,108 @@ public class Filler {
     /**
      * Logger.
      */
-    private static final Logger LOGGER = Logger.getLogger(Filler.class.getName());
+    private static final Logger LOGGER = Logger.getLogger(Filler.class);
+
     /**
      * {@code true} for published.
      */
     private static final boolean PUBLISHED = true;
+
     /**
      * User service.
      */
     private static UserService userService = UserServiceFactory.getUserService();
+
     /**
      * Topbar utilities.
      */
     @Inject
     private TopBars topBars;
+
     /**
      * Article repository.
      */
     @Inject
     private ArticleRepository articleRepository;
+
     /**
      * Comment repository.
      */
     @Inject
     private CommentRepository commentRepository;
+
     /**
      * Archive date repository.
      */
     @Inject
     private ArchiveDateRepository archiveDateRepository;
+
     /**
      * Category repository.
      */
     @Inject
     private CategoryRepository categoryRepository;
+
     /**
      * Tag repository.
      */
     @Inject
     private TagRepository tagRepository;
+
     /**
      * Link repository.
      */
     @Inject
     private LinkRepository linkRepository;
+
     /**
      * Page repository.
      */
     @Inject
     private PageRepository pageRepository;
+
     /**
      * Statistic query service.
      */
     @Inject
     private StatisticQueryService statisticQueryService;
+
     /**
      * User repository.
      */
     @Inject
     private UserRepository userRepository;
+
     /**
      * Option query service..
      */
     @Inject
     private OptionQueryService optionQueryService;
+
     /**
      * Article query service.
      */
     @Inject
     private ArticleQueryService articleQueryService;
+
     /**
      * Tag query service.
      */
     @Inject
     private TagQueryService tagQueryService;
+
     /**
      * User query service.
      */
     @Inject
     private UserQueryService userQueryService;
+
     /**
      * Fill tag article..
      */
     @Inject
     private FillTagArticles fillTagArticles;
+
     /**
      * Event manager.
      */
@@ -499,7 +519,6 @@ public class Filler {
             final List<JSONObject> recentArticles = articleRepository.getRecentArticles(recentArticleDisplayCnt);
 
             dataModel.put(Common.RECENT_ARTICLES, recentArticles);
-
         } catch (final JSONException e) {
             LOGGER.log(Level.ERROR, "Fills recent articles failed", e);
             throw new ServiceException(e);
@@ -527,21 +546,28 @@ public class Filler {
             final List<JSONObject> recentComments = commentRepository.getRecentComments(recentCommentDisplayCnt);
 
             for (final JSONObject comment : recentComments) {
-                final String content = comment.getString(Comment.COMMENT_CONTENT);
-                comment.put(Comment.COMMENT_CONTENT, content);
+                String commentContent = comment.optString(Comment.COMMENT_CONTENT);
+                commentContent = Emotions.convert(commentContent);
+                commentContent = Markdowns.toHTML(commentContent);
+                comment.put(Comment.COMMENT_CONTENT, commentContent);
+
                 comment.put(Comment.COMMENT_NAME, comment.getString(Comment.COMMENT_NAME));
                 comment.put(Comment.COMMENT_URL, comment.getString(Comment.COMMENT_URL));
 
                 comment.remove(Comment.COMMENT_EMAIL); // Erases email for security reason
+
+                final String email = comment.optString(Comment.COMMENT_EMAIL);
+                final String thumbnailURL = comment.optString(Comment.COMMENT_THUMBNAIL_URL);
+                if (Strings.isEmptyOrNull(thumbnailURL)) {
+                    comment.put(Comment.COMMENT_THUMBNAIL_URL, Thumbnails.getGravatarURL(email, "128"));
+                }
             }
 
             dataModel.put(Common.RECENT_COMMENTS, recentComments);
 
-        } catch (final JSONException e) {
+        } catch (final Exception e) {
             LOGGER.log(Level.ERROR, "Fills recent comments failed", e);
-            throw new ServiceException(e);
-        } catch (final RepositoryException e) {
-            LOGGER.log(Level.ERROR, "Fills recent comments failed", e);
+
             throw new ServiceException(e);
         } finally {
             Stopwatchs.end();
@@ -685,6 +711,10 @@ public class Filler {
             fillMinified(dataModel);
             fillPageNavigations(dataModel);
             fillStatistic(dataModel);
+
+            fillMostUsedTags(dataModel, preference);
+            fillArchiveDates(dataModel, preference);
+            fillMostUsedCategories(dataModel, preference);
         } catch (final JSONException e) {
             LOGGER.log(Level.ERROR, "Fills blog header failed", e);
             throw new ServiceException(e);
@@ -756,14 +786,6 @@ public class Filler {
                 fillRecentComments(dataModel, preference);
             }
 
-            if (Templates.hasExpression(template, "<#list mostUsedCategories as category>")) {
-                fillMostUsedCategories(dataModel, preference);
-            }
-
-            if (Templates.hasExpression(template, "<#list mostUsedTags as tag>")) {
-                fillMostUsedTags(dataModel, preference);
-            }
-
             if (Templates.hasExpression(template, "<#list mostCommentArticles as article>")) {
                 fillMostCommentArticles(dataModel, preference);
             }
@@ -771,11 +793,6 @@ public class Filler {
             if (Templates.hasExpression(template, "<#list mostViewCountArticles as article>")) {
                 fillMostViewCountArticles(dataModel, preference);
             }
-
-            if (Templates.hasExpression(template, "<#list archiveDates as archiveDate>")) {
-                fillArchiveDates(dataModel, preference);
-            }
-
         } catch (final ServiceException e) {
             LOGGER.log(Level.ERROR, "Fills side failed", e);
             throw new ServiceException(e);
@@ -811,24 +828,12 @@ public class Filler {
                 fillRecentComments(dataModel, preference);
             }
 
-            if (Templates.hasExpression(template, "<#list mostUsedCategories as category>")) {
-                fillMostUsedCategories(dataModel, preference);
-            }
-
-            if (Templates.hasExpression(template, "<#list mostUsedTags as tag>")) {
-                fillMostUsedTags(dataModel, preference);
-            }
-
             if (Templates.hasExpression(template, "<#list mostCommentArticles as article>")) {
                 fillMostCommentArticles(dataModel, preference);
             }
 
             if (Templates.hasExpression(template, "<#list mostViewCountArticles as article>")) {
                 fillMostViewCountArticles(dataModel, preference);
-            }
-
-            if (Templates.hasExpression(template, "<#list archiveDates as archiveDate>")) {
-                fillArchiveDates(dataModel, preference);
             }
 
             if (Templates.hasExpression(template, "<#include \"side.ftl\"/>")) {
@@ -900,7 +905,6 @@ public class Filler {
      * Sets some extra properties into the specified article with the specified author and preference, performs content
      * and abstract editor processing.
      * <p>
-     * <p>
      * Article ext properties:
      * <pre>
      * {
@@ -963,7 +967,6 @@ public class Filler {
      * Sets some extra properties into the specified article with the specified preference, performs content and
      * abstract editor processing.
      * <p>
-     * <p>
      * Article ext properties:
      * <pre>
      * {
@@ -973,7 +976,8 @@ public class Filler {
      *     "authorThumbnailURL": "",
      *     "hasUpdated": boolean
      * }
-     * </pre> </p>
+     * </pre>
+     * </p>
      *
      * @param request    the specified HTTP servlet request
      * @param article    the specified article
@@ -981,8 +985,7 @@ public class Filler {
      * @throws ServiceException service exception
      * @see #setArticlesExProperties(HttpServletRequest, List, JSONObject)
      */
-    private void setArticleExProperties(final HttpServletRequest request,
-                                        final JSONObject article, final JSONObject preference) throws ServiceException {
+    private void setArticleExProperties(final HttpServletRequest request, final JSONObject article, final JSONObject preference) throws ServiceException {
         try {
             final JSONObject author = articleQueryService.getAuthor(article);
             final String authorName = author.getString(User.USER_NAME);
@@ -1024,10 +1027,8 @@ public class Filler {
     /**
      * Sets some extra properties into the specified article with the specified author and preference.
      * <p>
-     * <p>
      * The batch version of method {@linkplain #setArticleExProperties(HttpServletRequest, JSONObject, JSONObject, JSONObject)}.
      * </p>
-     * <p>
      * <p>
      * Article ext properties:
      * <pre>
@@ -1037,7 +1038,8 @@ public class Filler {
      *     "authorId": "",
      *     "hasUpdated": boolean
      * }
-     * </pre> </p>
+     * </pre>
+     * </p>
      *
      * @param request    the specified HTTP servlet request
      * @param articles   the specified articles
@@ -1057,10 +1059,8 @@ public class Filler {
     /**
      * Sets some extra properties into the specified article with the specified preference.
      * <p>
-     * <p>
      * The batch version of method {@linkplain #setArticleExProperties(HttpServletRequest, JSONObject, JSONObject)}.
      * </p>
-     * <p>
      * <p>
      * Article ext properties:
      * <pre>
@@ -1070,7 +1070,8 @@ public class Filler {
      *     "authorId": "",
      *     "hasUpdated": boolean
      * }
-     * </pre> </p>
+     * </pre>
+     * </p>
      *
      * @param request    the specified HTTP servlet request
      * @param articles   the specified articles
@@ -1088,14 +1089,11 @@ public class Filler {
 
     /**
      * Processes the abstract of the specified article with the specified preference.
-     * <p>
-     * <p>
      * <ul>
      * <li>If the abstract is {@code null}, sets it with ""</li>
      * <li>If user configured preference "titleOnly", sets the abstract with ""</li>
      * <li>If user configured preference "titleAndContent", sets the abstract with the content of the article</li>
      * </ul>
-     * </p>
      *
      * @param preference the specified preference
      * @param article    the specified article
