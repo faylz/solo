@@ -15,6 +15,7 @@
 !package.json
 
 src/main/webapp/skins/*
+!src/main/webapp/skins/tree-house
 !src/main/webapp/skins/mobile
 !src/main/webapp/skins/9IPHP
 
