@@ -61,7 +61,8 @@ import java.util.List;
  *
  * @author <a href="http://88250.b3log.org">Liang Ding</a>
  * @author <a href="https://github.com/feroozkhanchintu">feroozkhanchintu</a>
- * @version 1.1.0.6, Jun 11, 2017
+ * @author <a href="https://github.com/nanolikeyou">nanolikeyou</a>
+ * @version 1.1.0.7, Aug 13, 2017
  * @since 0.3.1
  */
 @RequestProcessor
@@ -417,11 +418,10 @@ public class FeedProcessor {
         final String link = Latkes.getServePath() + article.getString(Article.ARTICLE_PERMALINK);
         ret.setLink(link);
         ret.setGUID(link);
-        final String authorEmail = article.getString(Article.ARTICLE_AUTHOR_EMAIL);
         if (hasMultipleUsers) {
             authorName = StringEscapeUtils.escapeXml(articleQueryService.getAuthor(article).getString(User.USER_NAME));
         }
-        ret.setAuthor(authorEmail + "(" + authorName + ")");
+        ret.setAuthor(authorName);
         final String tagsString = article.getString(Article.ARTICLE_TAGS_REF);
         final String[] tagStrings = tagsString.split(",");
         for (final String tagString : tagStrings) {

@@ -15,7 +15,6 @@
  */
 package org.b3log.solo.processor;
 
-
 import org.b3log.latke.Keys;
 import org.b3log.latke.Latkes;
 import org.b3log.latke.ioc.inject.Inject;
@@ -59,14 +58,14 @@ import java.io.IOException;
 import java.util.Calendar;
 import java.util.Map;
 
-
 /**
  * Login/logout processor.
  *
  * @author <a href="http://88250.b3log.org">Liang Ding</a>
  * @author <a href="http://vanessa.b3log.org">Liyuan Li</a>
  * @author <a href="mailto:dongxu.wang@acm.org">Dongxu Wang</a>
- * @version 1.1.1.8, Jul 20, 2017
+ * @author <a href="https://github.com/nanolikeyou">nanolikeyou</a>
+ * @version 1.1.1.9, Aug 13, 2017
  * @since 0.3.1
  */
 @RequestProcessor
@@ -148,6 +147,8 @@ public class LoginProcessor {
         String destinationURL = request.getParameter(Common.GOTO);
         if (Strings.isEmptyOrNull(destinationURL)) {
             destinationURL = Latkes.getServePath() + Common.ADMIN_INDEX_URI;
+        } else if (!isInternalLinks(destinationURL)) {
+            destinationURL = "/";
         }
 
         final HttpServletResponse response = context.getResponse();
@@ -246,7 +247,7 @@ public class LoginProcessor {
 
         String destinationURL = httpServletRequest.getParameter(Common.GOTO);
 
-        if (Strings.isEmptyOrNull(destinationURL)) {
+        if (Strings.isEmptyOrNull(destinationURL) || !isInternalLinks(destinationURL)) {
             destinationURL = "/";
         }
 
@@ -267,6 +268,8 @@ public class LoginProcessor {
 
         if (Strings.isEmptyOrNull(destinationURL)) {
             destinationURL = Latkes.getServePath() + Common.ADMIN_INDEX_URI;
+        } else if (!isInternalLinks(destinationURL)) {
+            destinationURL = "/";
         }
 
         renderPage(context, "reset-pwd.ftl", destinationURL, request);
@@ -351,12 +354,23 @@ public class LoginProcessor {
             final JSONObject requestJSONObject;
 
             requestJSONObject = Requests.parseRequestJSONObject(request, context.getResponse());
-            final String userEmail = requestJSONObject.getString(User.USER_EMAIL);
+            final String token = requestJSONObject.getString("token");
             final String newPwd = requestJSONObject.getString("newPwd");
+            final JSONObject passwordResetOption = optionQueryService.getOptionById(token);
+
+            if (null == passwordResetOption) {
+                LOGGER.log(Level.WARN, "Not found user by that token:[{0}]", token);
+                jsonObject.put("succeed", true);
+                jsonObject.put("to", Latkes.getServePath() + "/login?from=reset");
+                jsonObject.put(Keys.MSG, langPropsService.get("resetPwdFailedMsg"));
+                return;
+            }
+            final String userEmail = passwordResetOption.getString(Option.OPTION_VALUE);
             final JSONObject user = userQueryService.getUserByEmail(userEmail);
 
             user.put(User.USER_PASSWORD, newPwd);
             userMgmtService.updateUser(user);
+            // TODO delete expired token
             LOGGER.log(Level.DEBUG, "[{0}]'s password updated successfully.", userEmail);
 
             jsonObject.put("succeed", true);
@@ -392,18 +406,16 @@ public class LoginProcessor {
         final String token = new Randoms().nextStringWithMD5();
         final String adminEmail = preference.getString(Option.ID_C_ADMIN_EMAIL);
         final String mailSubject = langPropsService.get("resetPwdMailSubject");
-        final String mailBody = langPropsService.get("resetPwdMailBody") + " " + Latkes.getServePath() + "/forgot?token=" + token
-                + "&login=" + userEmail;
+        final String mailBody = langPropsService.get("resetPwdMailBody") + " " + Latkes.getServePath()
+                + "/forgot?token=" + token;
         final MailService.Message message = new MailService.Message();
 
         final JSONObject option = new JSONObject();
 
         option.put(Keys.OBJECT_ID, token);
         option.put(Option.OPTION_CATEGORY, "passwordReset");
-        option.put(Option.OPTION_VALUE, System.currentTimeMillis());
-
+        option.put(Option.OPTION_VALUE, userEmail);
         final Transaction transaction = optionRepository.beginTransaction();
-
         optionRepository.add(option);
         transaction.commit();
 
@@ -454,7 +466,6 @@ public class LoginProcessor {
         dataModel.put(Option.ID_C_BLOG_TITLE, preference.getString(Option.ID_C_BLOG_TITLE));
 
         final String token = request.getParameter("token");
-        final String email = request.getParameter("login");
         final JSONObject tokenObj = optionQueryService.getOptionById(token);
 
         if (tokenObj == null) {
@@ -462,7 +473,7 @@ public class LoginProcessor {
         } else {
             // TODO verify the expired time in the tokenObj
             dataModel.put("inputType", "password");
-            dataModel.put("userEmailHidden", email);
+            dataModel.put("tokenHidden", token);
         }
 
         final String from = request.getParameter("from");
@@ -477,5 +488,16 @@ public class LoginProcessor {
 
         Keys.fillRuntime(dataModel);
         filler.fillMinified(dataModel);
+    }
+
+    /**
+     * Preventing unvalidated redirects and forwards. See more at:
+     * <a href="https://www.owasp.org/index.php/Unvalidated_Redirects_and_Forwards_Cheat_Sheet">https://www.owasp.org/index.php/
+     * Unvalidated_Redirects_and_Forwards_Cheat_Sheet</a>.
+     *
+     * @return whether the destinationURL is an internal link
+     */
+    private boolean isInternalLinks(String destinationURL) {
+        return destinationURL.startsWith(Latkes.getServePath());
     }
 }
